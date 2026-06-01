@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import ws from 'ws';
 
 dotenv.config();
 
@@ -10,7 +11,11 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Faltan variables de entorno de Supabase: SUPABASE_URL y SUPABASE_KEY');
 }
 
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
+  realtime: {
+    transport: ws as any,
+  },
+});
 
 export class SupabaseProvider {
   /**
