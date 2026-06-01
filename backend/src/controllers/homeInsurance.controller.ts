@@ -222,8 +222,26 @@ export const submitEmissionForm = async (req: Request, res: Response) => {
                 }
             }
         }
+        // Add hidden mandatory answers for NOTEBOOK accessories (user is not asked, default = NO)
+        if (objectCode === 'NOTEBOOK') {
+            const notebookAccessoryDefaults: any = {
+                'EQUIPO_ELECTRONICO_MOUSE': 'NO',
+                'EQUIPO_ELECTRONICO_TECLADO': 'NO',
+                'EQUIPO_ELECTRONICO_AURICULARES': 'NO',
+                'EQUIPO_ELECTRONICO_MICROFONO': 'NO',
+                'EQUIPO_ELECTRONICO_CAMARA': 'NO',
+                'EQUIPO_ELECTRONICO_CASCOVR': 'NO',
+                'EQUIPO_ELECTRONICO_JOYSTICK': 'NO',
+            };
 
-        console.log('[Controller] Fetching expected form questions for order', ordenVentaId);
+            for (const [codigo, valor] of Object.entries(notebookAccessoryDefaults)) {
+                if (!finalAnswers.find((a: any) => a.codigoPregunta === codigo)) {
+                    finalAnswers.push({ codigoPregunta: codigo, valores: [valor] });
+                }
+            }
+        }
+
+
         const formResponse = await provider.apiClient.get(`/ordenventas/${ordenVentaId}/formularios`);
         const allowedCodes = formResponse.data.formularioDTO.preguntas.map((p: any) => p.codigo);
         console.log('[Controller] Allowed codes for this form:', allowedCodes);
