@@ -1,3 +1,7 @@
+// 🔥 PARCHE ANTES DE CUALQUIER OTRA COSA — Node 20 no tiene WebSocket nativo
+const WS = require('ws');
+(globalThis as any).WebSocket = WS.WebSocket || WS;
+
 import dotenv from 'dotenv';
 import path from 'path';
 
