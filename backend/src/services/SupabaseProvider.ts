@@ -1,6 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-const ws = require('ws');
+
+// 🔥 PARCHE GLOBAL PARA NODE 20 (Supabase necesita WebSocket nativo)
+const WS = require('ws');
+(globalThis as any).WebSocket = WS.WebSocket || WS;
 
 dotenv.config();
 
@@ -11,11 +14,7 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Faltan variables de entorno de Supabase: SUPABASE_URL y SUPABASE_KEY');
 }
 
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
-  realtime: {
-    transport: ws as any,
-  },
-});
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
 
 export class SupabaseProvider {
   /**
