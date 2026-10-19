@@ -12,7 +12,12 @@ if (!allowedOrigin) {
 const corsOptions: cors.CorsOptions = {
     origin: allowedOrigin.includes(',') ? allowedOrigin.split(',') : allowedOrigin,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    // Headers que el browser puede mandar en requests cross-origin.
+    // Si el front agrega un header que no está acá, el preflight lo rechaza y el
+    // request entero se bloquea (bug 19/10/2026: 'x-client-secret' rompía Hogar).
+    // Por eso además de los que se usan hoy dejamos x-client-secret tolerado,
+    // aunque el backend no lo lea, para que un reintento no vuelva a romper todo.
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-client-secret', 'X-Client-Secret'],
 };
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
