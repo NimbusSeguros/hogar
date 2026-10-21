@@ -3,6 +3,10 @@ import cors from 'cors';
 
 const app = express();
 
+// Detrás de nginx (+ Cloudflare): sin esto req.ip es la IP de nginx y el
+// rate limit agruparía a todos los usuarios en un solo bucket.
+app.set('trust proxy', 1);
+
 // CORS: restrict to allowed origins from env
 const allowedOrigin = process.env.ALLOWED_ORIGIN;
 if (!allowedOrigin) {
@@ -31,6 +35,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 import homeInsuranceRoutes from './routes/homeInsurance.routes';
 import authRoutes from './routes/auth.routes';
 import { authenticateToken } from './middleware/auth.middleware';
+import { tokenLimiter } from './middleware/rateLimit.middleware';
 
 // Main entry
 app.get('/health', (req: Request, res: Response) => {
@@ -38,7 +43,7 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 // API Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', tokenLimiter, authRoutes);
 app.use('/api/insurance/home', authenticateToken, homeInsuranceRoutes);
 
 // Basic Error handler
