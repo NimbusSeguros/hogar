@@ -24,13 +24,19 @@ import rateLimit from 'express-rate-limit';
 // ============================================================================
 
 /**
- * IP real del cliente. Detrás de Cloudflare + nginx la IP del socket es la de
- * CF/nginx; el header CF-Connecting-IP (seteado por Cloudflare, no spoofeable
- * desde internet porque CF lo sobreescribe) es la fuente confiable.
+ * IP real del cliente detrás de nginx. Prioridad:
+ *   1. CF-Connecting-IP — si algún día se agrega Cloudflare delante (no lo
+ *      borramos: CF lo sobreescribe siempre, no spoofeable A TRAVÉS de CF).
+ *   2. X-Real-IP — lo setea nginx con $remote_addr (no spoofeable vía nginx).
+ *   3. req.ip — fallback (X-Forwarded-For con trust proxy=1).
+ * Nota: el acceso directo al puerto 3002 con headers spoofeados se cierra con
+ * firewall a nivel VPS (ver docs/SEGURIDAD — no exponer el puerto de la app).
  */
 const clientIp = (req: Request): string => {
     const cf = req.headers['cf-connecting-ip'];
     if (typeof cf === 'string' && cf.length > 0) return cf;
+    const real = req.headers['x-real-ip'];
+    if (typeof real === 'string' && real.length > 0) return real;
     return req.ip || 'unknown';
 };
 
