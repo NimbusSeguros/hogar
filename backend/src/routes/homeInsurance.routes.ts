@@ -12,6 +12,7 @@ import {
     confirmOrder
 } from '../controllers/homeInsurance.controller';
 import { quotesLimiter, ordersLimiter } from '../middleware/rateLimit.middleware';
+import { requireEmissionScope } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -22,11 +23,12 @@ router.get('/objects/:objectCode/indicios/:indicioCode/form', quotesLimiter, get
 router.post('/objects/:objectCode/indicios/:indicioCode/form/submit', quotesLimiter, submitFormAnswers);
 router.get('/consultas/:consultaId/planes', quotesLimiter, getPlansByConsultaId);
 
-// Emission flow (crea órdenes REALES en SIAPI → límite más estricto)
-router.post('/orders/create', ordersLimiter, createOrder);
-router.post('/orders/:ordenVentaId/datocliente', ordersLimiter, submitClientData);
-router.post('/orders/:ordenVentaId/form/submit', ordersLimiter, submitEmissionForm);
-router.post('/orders/:ordenVentaId/infopago', ordersLimiter, submitPaymentInfo);
-router.post('/orders/:ordenVentaId/confirm', ordersLimiter, confirmOrder);
+// Emission flow (crea órdenes REALES en SIAPI → límite más estricto + scope).
+// requireEmissionScope es INERTE hasta que SCOPE_ENFORCEMENT=true (rollout seguro).
+router.post('/orders/create', ordersLimiter, requireEmissionScope, createOrder);
+router.post('/orders/:ordenVentaId/datocliente', ordersLimiter, requireEmissionScope, submitClientData);
+router.post('/orders/:ordenVentaId/form/submit', ordersLimiter, requireEmissionScope, submitEmissionForm);
+router.post('/orders/:ordenVentaId/infopago', ordersLimiter, requireEmissionScope, submitPaymentInfo);
+router.post('/orders/:ordenVentaId/confirm', ordersLimiter, requireEmissionScope, confirmOrder);
 
 export default router;

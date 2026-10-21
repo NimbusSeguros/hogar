@@ -45,9 +45,9 @@ const baseOptions = {
     standardHeaders: true as const,   // RateLimit-* headers (bien para el front)
     legacyHeaders: false as const,    // no X-RateLimit-* viejos
     keyGenerator: clientIp,
-    // Desactivamos la validación de express-rate-limit sobre trust proxy:
-    // nuestro keyGenerator usa CF-Connecting-IP, no X-Forwarded-For crudo.
-    validations: { ip: false as const, xForwardedForHeader: false as const },
+    // Nota: express-rate-limit v8 eliminó la opción `validations` de v7.
+    // Nuestro keyGenerator lee CF-Connecting-IP (no X-Forwarded-For crudo),
+    // así que las validaciones default de v8 no interfieren.
 };
 
 /** POST /api/auth/token — minteo de JWT. El punto más golbable. */

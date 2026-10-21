@@ -16,7 +16,10 @@ router.post('/token', (req: Request, res: Response) => {
     }
     
     if (requestSecret === envClientSecret) {
-        const token = jwt.sign({ app: 'yuju-frontend' }, secret, { expiresIn: '24h' });
+        // Fix A (seguridad): el token del ClientSecret público es SOLO para
+        // cotizar. La emisión (orders/*) exige scope 'emission', que se obtiene
+        // con sesión Supabase (ver requireEmissionScope en auth.middleware).
+        const token = jwt.sign({ app: 'yuju-frontend', scope: 'quote' }, secret, { expiresIn: '24h' });
         return res.json({ token });
     }
 
