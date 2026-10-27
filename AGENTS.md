@@ -124,13 +124,36 @@ Reglas derivadas:
 
 Flujo en dos pasos:
 
-1. `POST /api/auth/token` con `{ clientSecret }` → devuelve un JWT de 24 h.
+1. `POST /api/auth/token` con `{ clientSecret }` → devuelve un JWT de 24 h con **scope `quote`** (solo cotización).
 2. El resto de `/api/insurance/home/*` exige `Authorization: Bearer <token>`
    (`middleware/auth.middleware.ts`).
 
 El front hace esto automáticamente vía `hogarApiClient` en
 `Yuju/src/services/unifiedApiClient.ts` (token cacheado en `sessionStorage` bajo la clave
 `hogar_auth_token`, retry automático ante 401/403).
+
+### Scopes quote/emission (Fix A, 21/10/2026) + rate limiting (Fix B)
+
+El `clientSecret` vive en el bundle público → el token de `/api/auth/token` se considera
+**público por diseño** y solo autoriza a cotizar. Dos capas extra protegen la emisión:
+
+**1. Rate limiting** (`middleware/rateLimit.middleware.ts`, por IP real vía nginx):
+- `POST /api/auth/token`: 30/h · cotización: 240/h · `orders/*`: 30/h
+- La IP real llega por `X-Real-IP` (la setea nginx con `$remote_addr`; NO hay Cloudflare).
+- Overridable por env: `RATE_LIMIT_{TOKEN,QUOTES,ORDERS}_PER_HOUR`.
+- OJO: express-rate-limit **v8** no acepta la opción `validations` (era v7) — crashea al arrancar.
+
+**2. Scopes del JWT**:
+- `orders/*` pasa por `requireEmissionScope`. Con `SCOPE_ENFORCEMENT=false` (default,
+  **modo actual**) solo loguea `[SCOPE] enforcement OFF` y deja pasar. Con `true` rechaza
+  tokens de solo-cotización.
+- La emisión legítima viaja con **token de sesión Supabase anónima** (el front lo obtiene
+  con `signInAnonymously` — requiere "anonymous sign-ins" habilitado en Supabase, ya activo).
+  `authenticateToken` acepta: JWT propio (local) o token Supabase (verificado con
+  `SUPABASE_URL`/`SUPABASE_KEY`) → este último equivale a scope `emission` + uid trazable.
+- **Rollout acordado**: observar logs `[SCOPE] ... token=supabase` en prod unos días tras
+  emisiones reales → recién entonces la persona setea `SCOPE_ENFORCEMENT=true` en el `.env`
+  del server a mano + `pm2 restart`. Reversible en un reinicio.
 
 ## Endpoints principales
 
@@ -169,8 +192,10 @@ cd /var/www/hogar && git status --short
 # 2. Traer la rama
 git fetch origin && git checkout produccion-octubre && git pull
 
-# 3. COMPILAR — pm2 corre dist/, no ts-node. Sin este paso "no pasa nada"
-cd backend && npx tsc
+# 3. DEPENDENCIAS (si el deploy agrega/saca deps — saltarlo rompe el server:
+#    502 el 21/10/2026 por falta de express-rate-limit) + COMPILAR
+cd backend && pnpm install --frozen-lockfile && npx tsc
+# (pm2 corre dist/, no ts-node. Sin compilar "no pasa nada")
 
 # 4. Reiniciar
 pm2 restart yuju-backend
@@ -178,6 +203,12 @@ pm2 restart yuju-backend
 # 5. Verificar
 curl -s https://apiyujumove.com/health
 ```
+
+⚠️ **Detalles del deploy que ya costaron tiempo:**
+- **`pnpm install` ANTES de `tsc`** cuando el commit toca `package.json` — un `tsc` sin
+  su dependencia emite JS roto igual y pm2 lo levanta → 502.
+- **No encadenar con `| tail` a ciegas**: el pipe devuelve el exit code de `tail` (0) y
+  un `tsc` fallido no corta la cadena `&&`. Verificar el paso o usar `set -o pipefail`.
 
 ⚠️ **Detalles del deploy que ya costaron tiempo:**
 - pm2 corre **`dist/server.js` compilado** (`exec cwd /var/www/hogar/backend`). Un `pull`
@@ -191,6 +222,26 @@ curl -s https://apiyujumove.com/health
   (idealmente commiteándolo al repo) y se decide con la persona, nunca se pisa a ciegas.
   Ejemplo real: el 19/10/2026 había `credentials: true` sin commitear en `app.ts`; se
   guardó con `git stash push` antes del deploy → `stash@{0}` en el server.
+
+## 🔒 Hardening de la VPS (21/10/2026)
+
+Tres capas sobre `apiyujumove.com` — verificadas en producción:
+
+1. **nginx** (`/etc/nginx/sites-enabled/apiyujumove.com`):
+   - Pasa `X-Real-IP` + `X-Forwarded-For` al backend (sin esto el rate limit agrupa a
+     todos los usuarios en un solo bucket).
+   - `limit_req` como escudo: zonas en `/etc/nginx/conf.d/ratelimit-zones.conf`
+     (token 10r/m, orders 30r/m, api 60r/m — tasas generosas, el límite fino lo hace la app).
+   - **Los backups de configs nginx van a `/etc/nginx/backups/`**, NUNCA en
+     `sites-enabled/` (nginx los carga también → "conflicting server name").
+2. **ufw** (firewall de SO): default deny incoming, solo 22/80/443. El puerto 3002 del
+   backend NO se expone (evita bypass de nginx + spoof de headers).
+3. **Firewall del panel Hostinger** (grupo 365471, compartido por TODAS las VPS):
+   - SSH (22) solo desde una IP fija de la persona · 443 abierto · 8888 (terminal web) abierto.
+   - ⚠️ **Puerto 80 BLOQUEADO** → las renovaciones de Let's Encrypt por HTTP-01 fallarían.
+     Verificar vencimientos (`certbot certificates`) y decidir si se agrega la regla 80.
+
+Snapshot previo a deploys riesgosos: vía MCP `hostinger-vps` (⚠️ un solo slot — pisa el anterior).
 
 ## Smoke test post-deploy
 
