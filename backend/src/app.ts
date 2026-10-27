@@ -46,11 +46,14 @@ app.get('/health', (req: Request, res: Response) => {
 app.use('/api/auth', tokenLimiter, authRoutes);
 app.use('/api/insurance/home', authenticateToken, homeInsuranceRoutes);
 
-// Basic Error handler
+// Basic Error handler — nunca expone mensajes técnicos al cliente (spec 0029):
+// el detalle queda solo en logs del server.
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    console.error(err.stack);
+    console.error(err.stack || err.message || err);
     res.status(500).json({
-        message: err.message || 'Internal Server Error',
+        error: process.env.NODE_ENV === 'development'
+            ? (err.message || 'Internal Server Error')
+            : 'Ocurrió un error inesperado. Intentá de nuevo en un momento.',
         stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
     });
 });

@@ -25,16 +25,19 @@ import rateLimit from 'express-rate-limit';
 
 /**
  * IP real del cliente detrás de nginx. Prioridad:
- *   1. CF-Connecting-IP — si algún día se agrega Cloudflare delante (no lo
- *      borramos: CF lo sobreescribe siempre, no spoofeable A TRAVÉS de CF).
- *   2. X-Real-IP — lo setea nginx con $remote_addr (no spoofeable vía nginx).
+ *   1. CF-Connecting-IP — SOLO si TRUST_CF_CONNECTING_IP=true (si algún día se agrega
+ *      Cloudflare delante). Sin el flag, el header se IGNORA: como no hay CF en el
+ *      camino, un cliente puede spoofearlo y generar un bucket nuevo por request,
+ *      bypasseando el rate limit (hallazgo 🔴 del auditor, 27/10/2026).
+ *   2. X-Real-IP — lo setea nginx con $remote_addr (no spoofeable vía nginx; el acceso
+ *      directo al puerto de la app está cerrado con firewall).
  *   3. req.ip — fallback (X-Forwarded-For con trust proxy=1).
- * Nota: el acceso directo al puerto 3002 con headers spoofeados se cierra con
- * firewall a nivel VPS (ver docs/SEGURIDAD — no exponer el puerto de la app).
  */
 const clientIp = (req: Request): string => {
-    const cf = req.headers['cf-connecting-ip'];
-    if (typeof cf === 'string' && cf.length > 0) return cf;
+    if (process.env.TRUST_CF_CONNECTING_IP === 'true') {
+        const cf = req.headers['cf-connecting-ip'];
+        if (typeof cf === 'string' && cf.length > 0) return cf;
+    }
     const real = req.headers['x-real-ip'];
     if (typeof real === 'string' && real.length > 0) return real;
     return req.ip || 'unknown';

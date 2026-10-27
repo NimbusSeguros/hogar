@@ -6,15 +6,19 @@ const router = Router();
 // Simple endpoint to get a token for the frontend
 // In a real app, this would involve validating user credentials
 router.post('/token', (req: Request, res: Response) => {
-    const { clientSecret: requestSecret } = req.body;
-    
+    const requestSecret = typeof req.body?.clientSecret === 'string' ? req.body.clientSecret : undefined;
+
     const secret = process.env.JWT_SECRET;
     const envClientSecret = process.env.CLIENT_SECRET;
     if (!secret || !envClientSecret) {
         console.error('JWT_SECRET o CLIENT_SECRET no están configurados en variables de entorno');
         return res.status(500).json({ error: 'Server configuration error' });
     }
-    
+
+    if (!requestSecret) {
+        return res.status(400).json({ error: 'Falta el clientSecret en el body.' });
+    }
+
     if (requestSecret === envClientSecret) {
         // Fix A (seguridad): el token del ClientSecret público es SOLO para
         // cotizar. La emisión (orders/*) exige scope 'emission', que se obtiene
